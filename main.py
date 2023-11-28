@@ -5,7 +5,7 @@ import typing
 from clearSky import log
 import clearSky
 from handleRequest import (handle_request_method_GET, handle_request_method_POST,
-                           handle_request_method_ERROR)
+                           handle_request_method_ERROR, Request)
 HOST, PORT = "127.0.0.1", 8001
 
 class ManagerSockets:
@@ -22,7 +22,7 @@ class ManagerSockets:
     def append(self, socket):
         self.allSockets.append(socket)
 
-    def remove(self, socket: socket.socket):
+    def remove(self, socket: socket.socket, isClose = True):
         for key in self.authSocket:
             socketList = self.authSocket[key]
             while socketList.count(socket):
@@ -32,9 +32,10 @@ class ManagerSockets:
         log("remove from all sockets: ", socket)
         
         testExist = self.socketMessages.get(socket)
-        if None != testExist:
+        if None != testExist and b"" != testExist:
             log("WARRING.", "remove", "exist message: ", testExist)
-        socket.close()
+        if isClose:
+            socket.close()
     
     def addMessage(self, socket: socket.socket, message: bytes):
         self.socketMessages[socket] = self.socketMessages.get(socket, b'') + message
@@ -69,26 +70,36 @@ class ManagerSockets:
         
         method,path,version = methodPathVersion["method"], methodPathVersion["path"], methodPathVersion["version"]
         log("method: ", method, "path: ", path, "version: ", version)
-        if "get" == method:
-            handle_request_method_GET(headers, self, socket)  
-        elif "post" == method:
+
+        raw_body = b""
+        if "post" == method:
             try:
                 content_length = int(headers.get("content-length", 0))
             except ValueError:
                 content_length = 0
-            body = anotherPart[0:content_length]
+            raw_body = anotherPart[0:content_length]
             messageLast = anotherPart[content_length:]
-            handle_request_method_POST(headers, body, self, socket)
+            
+        request = Request(method, path, headers, raw_body, self, socket)
+        if "get" == method:
+            handle_request_method_GET(request)  
+        elif "post" == method:
+            handle_request_method_POST(request)
         else:
-            handle_request_method_ERROR(self, socket)
+            handle_request_method_ERROR(request)
             
         log("parseMessage. MessageLast:", messageLast)
         self.socketMessages[socket] = messageLast
        
     def auth(self, socket: socket.socket, name: str):
+        log("auth: ", name, "socket: ", socket)
         s_list = self.authSocket.setdefault(name, [])
         s_list.append(socket)
 
+    def sendError(self, socket: socket.socket, message: str):
+        log("SEND ERROR: ", message, "socket: ", socket)
+                
+        
 def workWithSocket(socket : socket.socket, manager: ManagerSockets):
     allData = b''
     timeout = 0
