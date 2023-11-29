@@ -7,7 +7,7 @@ import clearSky
 from handleRequest import (handle_request_method_GET, handle_request_method_POST,
                            handle_request_method_ERROR, Request)
 HOST, PORT = "127.0.0.1", 8001
-
+NOT_AUTH_GROUP = ""
 class ManagerSockets:
     _instance = None
 
@@ -21,11 +21,13 @@ class ManagerSockets:
 
     def append(self, socket):
         self.allSockets.append(socket)
+        s_list = self.authSocket.setdefault(NOT_AUTH_GROUP, [])
+        s_list.append(socket)
 
-    def remove(self, socket: socket.socket, isClose = True):
+    def remove(self, socket: socket.socket):
         for key in self.authSocket:
             socketList = self.authSocket[key]
-            while socketList.count(socket):
+            while socketList.count(socket)>0:
                 socketList.remove(socket)
                 log("remove auth: ", key, socket)
         self.allSockets.remove(socket)
@@ -34,8 +36,7 @@ class ManagerSockets:
         testExist = self.socketMessages.get(socket)
         if None != testExist and b"" != testExist:
             log("WARRING.", "remove", "exist message: ", testExist)
-        if isClose:
-            socket.close()
+        socket.close()
     
     def addMessage(self, socket: socket.socket, message: bytes):
         self.socketMessages[socket] = self.socketMessages.get(socket, b'') + message
@@ -93,6 +94,9 @@ class ManagerSockets:
        
     def auth(self, socket: socket.socket, name: str):
         log("auth: ", name, "socket: ", socket)
+        not_auth_list = self.authSocket.setdefault(NOT_AUTH_GROUP, [])
+        if not_auth_list.count(socket)>0:
+            not_auth_list.remove(socket)
         s_list = self.authSocket.setdefault(name, [])
         s_list.append(socket)
 
