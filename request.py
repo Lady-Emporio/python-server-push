@@ -9,11 +9,10 @@
 import email.utils
 import time
 
-import socket
+import socket as lib_socket
 
 from clearSky import log
 import urllib.parse
-import views
 
 from typing import TYPE_CHECKING
 
@@ -30,7 +29,8 @@ INTERNAL_SERVER_ERROR = 500, 'Internal Server Error'
 
 
 class Request:
-    def __init__(self, method, path: str, headers, raw_body: bytes, manager: 'main.ManagerSockets', socket):
+    def __init__(self,  method: str, path: str, headers,
+                 raw_body: bytes, manager: 'main.ManagerSockets', socket: lib_socket.socket):
         self.method = method
         self.path = path
         if not self.path.endswith("/"):
@@ -41,28 +41,28 @@ class Request:
         self.socket = socket
         self.bodyParams = {}
 
-        bodyStr = self.raw_body.decode(encoding='utf-8', errors='ignore')
-        rawStrBody = urllib.parse.unquote_plus(bodyStr)
-        rawListBody = rawStrBody.split("&")
-        for rawBodyKeyValue in rawListBody:
-            indexEndKey = rawBodyKeyValue.find("=")
-            self.bodyParams[rawBodyKeyValue[:indexEndKey].lower()] = rawBodyKeyValue[indexEndKey + 1:]
+        body_str = self.raw_body.decode(encoding='utf-8', errors='ignore')
+        raw_str_body = urllib.parse.unquote_plus(body_str)
+        raw_list_body = raw_str_body.split("&")
+        for rawBodyKeyValue in raw_list_body:
+            index_end_key = rawBodyKeyValue.find("=")
+            self.bodyParams[rawBodyKeyValue[:index_end_key].lower()] = rawBodyKeyValue[index_end_key + 1:]
 
     def send_200(self, body: str):
-        self.__send(body, OK[1])
+        self.__send(body, OK)
 
     def send_not_found_404(self, body: str):
-        self.__send(body, NOT_FOUND[1])
+        self.__send(body, NOT_FOUND)
 
     def send_bad_request_400(self, body: str):
-        self.__send(body, BAD_REQUEST[1])
+        self.__send(body, BAD_REQUEST)
 
-    def __send(self, body: str, code: str):
+    def __send(self, body: str, code: tuple[int,str]):
         body_bytes = body.encode('UTF-8', 'replace')
         content_length = str(len(body))
 
         date_str = email.utils.formatdate(time.time(), usegmt=True)
-        message_text: str = (f"HTTP/1.1 {code}\r\n"
+        message_text: str = (f"HTTP/1.1 {code[0]} {code[1]}\r\n"
                              "Server: Lady-Emporio\r\n"
                              f"Date: {date_str}\r\n"
                              "Content-Type: text/html; charset=utf-8\r\n"
