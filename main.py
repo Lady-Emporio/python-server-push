@@ -1,47 +1,48 @@
-import socket
+import socket as ssocket
 import select
 import typing
 
 from clearSky import log
 import clearSky
-from handleRequest import (handle_request_method_GET, handle_request_method_POST,
-                           handle_request_method_ERROR, Request)
+from request import Request
+import route
+
 HOST, PORT = "127.0.0.1", 8001
 NOT_AUTH_GROUP = ""
 class ManagerSockets:
     _instance = None
 
-    allSockets: typing.List[socket.socket] = []
-    authSocket: typing.Dict[str, typing.List[socket.socket]] = {}  # Name: list socket
-    socketMessages: typing.Dict[socket.socket, bytes] = {}
-    def __new__(class_, *args, **kwargs):
-        if not isinstance(class_._instance, class_):
-            class_._instance = object.__new__(class_, *args, **kwargs)
-        return class_._instance
+    allSockets: typing.List[ssocket.socket] = []
+    authSocket: typing.Dict[str, typing.List[ssocket.socket]] = {}  # Name: list socket
+    socketMessages: typing.Dict[ssocket.socket, bytes] = {}
+    def __new__(cls, *args, **kwargs):
+        if not isinstance(cls._instance, cls):
+            cls._instance = object.__new__(cls, *args, **kwargs)
+        return cls._instance
 
-    def append(self, socket):
+    def append(self, socket: ssocket.socket):
         self.allSockets.append(socket)
         s_list = self.authSocket.setdefault(NOT_AUTH_GROUP, [])
         s_list.append(socket)
 
-    def remove(self, socket: socket.socket):
+    def remove(self, socket: ssocket.socket):
         for key in self.authSocket:
-            socketList = self.authSocket[key]
-            while socketList.count(socket)>0:
-                socketList.remove(socket)
+            socket_list = self.authSocket[key]
+            while socket_list.count(socket)>0:
+                socket_list.remove(socket)
                 log("remove auth: ", key, socket)
         self.allSockets.remove(socket)
         log("remove from all sockets: ", socket)
         
-        testExist = self.socketMessages.get(socket)
-        if None != testExist and b"" != testExist:
-            log("WARRING.", "remove", "exist message: ", testExist)
+        test_exist = self.socketMessages.get(socket)
+        if None != test_exist and b"" != test_exist:
+            log("WARRING.", "remove", "exist message: ", test_exist)
         socket.close()
     
-    def addMessage(self, socket: socket.socket, message: bytes):
+    def addMessage(self, socket: ssocket.socket, message: bytes):
         self.socketMessages[socket] = self.socketMessages.get(socket, b'') + message
         
-    def parseMessage(self, socket: socket.socket):
+    def parseMessage(self, socket: ssocket.socket):
         splitPart = b'\r\n\r\n'
         message = self.socketMessages.get(socket, b'')
         indexEndHeader = message.find(splitPart)
@@ -83,16 +84,16 @@ class ManagerSockets:
             
         request = Request(method, path, headers, raw_body, self, socket)
         if "get" == method:
-            handle_request_method_GET(request)  
+            route.handle_request_method_GET(request)  
         elif "post" == method:
-            handle_request_method_POST(request)
+            route.handle_request_method_POST(request)
         else:
-            handle_request_method_ERROR(request)
+            request.send_bad_request_400(f"method not get and not post: '{method}'.")
             
         log("parseMessage. MessageLast:", messageLast)
         self.socketMessages[socket] = messageLast
        
-    def auth(self, socket: socket.socket, name: str):
+    def auth(self, socket: ssocket.socket, name: str):
         log("auth: ", name, "socket: ", socket)
         not_auth_list = self.authSocket.setdefault(NOT_AUTH_GROUP, [])
         if not_auth_list.count(socket)>0:
@@ -100,11 +101,8 @@ class ManagerSockets:
         s_list = self.authSocket.setdefault(name, [])
         s_list.append(socket)
 
-    def sendError(self, socket: socket.socket, message: str):
-        log("SEND ERROR: ", message, "socket: ", socket)
-                
         
-def workWithSocket(socket : socket.socket, manager: ManagerSockets):
+def workWithSocket(socket : ssocket.socket, manager: ManagerSockets):
     allData = b''
     timeout = 0
     log("Begin recv", socket)
@@ -137,7 +135,7 @@ def workWithSocket(socket : socket.socket, manager: ManagerSockets):
     manager.parseMessage(socket)
 
 def serverForever():
-    serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serv_sock = ssocket.socket(ssocket.AF_INET, ssocket.SOCK_STREAM)
     serv_sock.bind((HOST, PORT))
     serv_sock.listen(10)
 
